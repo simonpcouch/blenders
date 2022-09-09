@@ -3,7 +3,7 @@
 
 # blenders
 
-The [`general_meta` branch of
+The [`general-meta` branch of
 `tidymodels/stacks`](https://github.com/tidymodels/stacks/tree/general-meta)
 contains experimental source code for an interface to a generalized
 meta-learner in stacks. This repository contains source code for testing
