@@ -1,0 +1,126 @@
+
+```{r}
+steps <- list(step_center, step_scale)
+
+steps <-
+  tibble(
+    steps = list(step_center, step_scale),
+    selectors = c(quo(all_numeric_predictors()),
+                  quo(all_numeric_predictors()))
+  )
+```
+
+```{r}
+
+reprex::reprex({
+  
+  library(tidymodels)
+  library(stacks)
+  library(bonsai)
+  
+  tidymodels_prefer()
+  
+  # regression ------------------------------------------------------------------
+  reg_bt <-
+    boost_tree(mtry = tune()) %>%
+    set_engine("lightgbm") %>%
+    set_mode("regression")
+  
+  set.seed(1)
+  
+  reg_st_bt_time <-
+    system.time({
+      reg_st_bt <-
+        stacks() %>%
+        add_candidates(reg_res_lr) %>%
+        add_candidates(reg_res_svm) %>%
+        add_candidates(reg_res_sp) %>%
+        blend_predictions(meta_learner = reg_bt) %>%
+        fit_members()
+    })
+  
+  reg_st_bt_preds <- predict(reg_st_bt, tree_frogs_reg_test)
+  
+  # with a workflow:
+  reg_st_bt2 <-
+    stacks() %>%
+    add_candidates(reg_res_lr) %>%
+    add_candidates(reg_res_svm) %>%
+    add_candidates(reg_res_sp)
+  
+  reg_bt_wf <-
+    workflow() %>%
+    add_model(reg_bt) %>%
+    add_recipe(recipe(latency ~ ., data = reg_st_bt2))
+  
+  reg_st_bt2_ <-
+    reg_st_bt2 %>%
+    blend_predictions(meta_learner = reg_bt_wf) %>%
+    fit_members()
+  
+  set.seed(1)
+  
+  reg_st_glmnet_time <-
+    system.time({
+      reg_st_glmnet <-
+        stacks() %>%
+        add_candidates(reg_res_lr) %>%
+        add_candidates(reg_res_svm) %>%
+        add_candidates(reg_res_sp) %>%
+        blend_predictions() %>%
+        fit_members()
+    })
+  
+  reg_st_glmnet_preds <- predict(reg_st_glmnet, tree_frogs_reg_test)
+  
+  # comparing time to fit
+  reg_st_bt_time[["elapsed"]] / reg_st_glmnet_time[["elapsed"]]
+  
+  # comparing rmse
+  rmse_vec(tree_frogs_reg_test$latency, reg_st_bt_preds$.pred)
+  rmse_vec(tree_frogs_reg_test$latency, reg_st_glmnet_preds$.pred)
+  
+  # classification --------------------------------------------------------------
+  class_bt <-
+    boost_tree(mtry = tune(), min_n = tune(), tree_depth = tune()) %>%
+    set_engine("lightgbm") %>%
+    set_mode("classification")
+  
+  set.seed(1)
+  
+  class_st_bt_time <-
+    system.time({
+      class_st_bt <-
+        stacks() %>%
+        add_candidates(class_res_rf) %>%
+        add_candidates(class_res_nn) %>%
+        blend_predictions(meta_learner = class_bt) %>%
+        fit_members()
+    })
+  
+  class_st_bt_preds <- predict(class_st_bt, tree_frogs_class_test)
+  
+  set.seed(1)
+  
+  class_st_glmnet_time <-
+    system.time({
+      class_st_glmnet <-
+        stacks() %>%
+        add_candidates(class_res_rf) %>%
+        add_candidates(class_res_nn) %>%
+        blend_predictions() %>%
+        fit_members()
+    })
+  
+  class_st_glmnet_preds <- predict(class_st_glmnet, tree_frogs_class_test)
+  
+  # comparing accuracy
+  accuracy_vec(tree_frogs_class_test$reflex, class_st_bt_preds$.pred_class)
+  accuracy_vec(tree_frogs_class_test$reflex, class_st_glmnet_preds$.pred_class)
+  
+  # comparing time to fit
+  class_st_bt_time[["elapsed"]] / class_st_glmnet_time[["elapsed"]]
+})
+
+
+```
