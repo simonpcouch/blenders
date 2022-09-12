@@ -1,6 +1,8 @@
 ```{r}
 library(tidymodels)
 library(bonsai)
+library(blenders)
+library(future)
 ```
 
 ```{r}
@@ -43,7 +45,7 @@ rec_svm <-
   )
 
 spec_nn <-
-  mlp(hidden_units = tune(), penalty = tune(), dropout = tune()) %>%
+  mlp(hidden_units = tune(), penalty = tune()) %>%
   set_engine("nnet") %>%
   set_mode("regression")
 
@@ -104,13 +106,17 @@ configs
 ```
 
 ```{r}
+plan(multisession, workers = 8)
+
 res <- 
-  purrr::map2(
+  furrr::future_map2(
     pmap(configs, construct_workflow),
     uncount(test_data, weights = rep(nrow(test_specs), nrow(test_data))) %>% 
       pull(data),
     benchmark_model
   )
 
-res
+res_base <- bind_rows(res) %>% bind_cols(configs) %>% select(-data)
+
+save(res_base, file = "data-raw/res_base.Rda")
 ```

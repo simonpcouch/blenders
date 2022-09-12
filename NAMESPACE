@@ -3,3 +3,7 @@
 S3method(benchmark_model,workflow)
 S3method(benchmark_model,workflow_set)
 export(benchmark_model)
+export(call_step)
+export(construct_workflow)
+export(fit_stack)
+export(preprocess_data)

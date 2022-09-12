@@ -1,3 +1,4 @@
+#' @export
 fit_stack <- function(workflow_set, meta_learner, steps) {
   data_st <-
     stacks() %>%
@@ -15,6 +16,7 @@ fit_stack <- function(workflow_set, meta_learner, steps) {
     fit_members()
 }
 
+#' @export
 preprocess_data <- function(data, steps, outcome = attr(data, "outcome")) {
   form <-
     rlang::new_formula(
@@ -38,10 +40,12 @@ preprocess_data <- function(data, steps, outcome = attr(data, "outcome")) {
   res
 }
 
+#' @export
 call_step <- function(recipe, step_fn, selector) {
   recipe %>% step_fn(!!selector)
 }
 
+#' @export
 construct_workflow <- function(spec, steps, data, outcome) {
   preprocess_data(data, steps, outcome) %>%
     workflow(spec)
