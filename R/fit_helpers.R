@@ -24,10 +24,18 @@ preprocess_data_stack <- function(data_stack, steps) {
     )
 
   # make a recipe based on the data stack and add the steps
-  purrr::reduce2(.x = steps$steps,
-                 .y = steps$selectors,
-                 .f = call_step,
-                 .init = recipe(form, data = data_stack))
+  if (nrow(steps) > 0) {
+    res <-
+      purrr::reduce2(.x = steps$steps,
+                     .y = steps$selectors,
+                     .f = call_step,
+                     .init = recipe(form, data = data_stack))
+  } else {
+    res <-
+      recipe(form, data = data_stack)
+  }
+
+
 }
 
 call_step <- function(recipe, step_fn, selector) {

@@ -50,7 +50,7 @@ benchmark_model.workflow_set <- function(workflow_set, data, meta_learner, steps
       map_res <-
         workflow_map(
           object = workflow_set,
-          resamples = rsample::bootstraps(data_train, times = 25),
+          resamples = rsample::vfold_cv(data_train, v = 5),
           control = control_stack_grid()
         )
 
@@ -66,19 +66,21 @@ benchmark_model.workflow_set <- function(workflow_set, data, meta_learner, steps
         add_recipe(st_rec)
 
       res <-
+        data_st %>%
         blend_predictions(meta_learner = st_wf) %>%
         fit_members()
     })
 
-  metric <- res$metrics$.metric[[1]]
+  metric <- res$model_metrics[[1]]$.metric[[1]]
 
   res_metric <-
     rlang::call2(
       paste0(metric, "_vec"),
-      truth = data_st[attr(data_st, "outcome")],
+      truth = data_test[[attr(data_st, "outcome")]],
       estimate = predict(res, data_test) %>% dplyr::pull(),
       .ns = "yardstick"
-    )
+    ) %>%
+    rlang::eval_tidy()
 
   list(time_to_fit = timing[["elapsed"]], metric = metric, metric_value = res_metric)
 }
