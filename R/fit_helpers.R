@@ -15,12 +15,12 @@ fit_stack <- function(workflow_set, meta_learner, steps) {
     fit_members()
 }
 
-preprocess_data_stack <- function(data_stack, steps) {
+preprocess_data <- function(data, steps, outcome = attr(data, "outcome")) {
   form <-
     rlang::new_formula(
-      as.name(attr(data_stack, "outcome")),
+      as.name(outcome),
       as.name("."),
-      env = rlang::base_env()
+      env = rlang::new_environment()
     )
 
   # make a recipe based on the data stack and add the steps
@@ -29,13 +29,13 @@ preprocess_data_stack <- function(data_stack, steps) {
       purrr::reduce2(.x = steps$steps,
                      .y = steps$selectors,
                      .f = call_step,
-                     .init = recipe(form, data = data_stack))
+                     .init = recipe(form, data = data))
   } else {
     res <-
-      recipe(form, data = data_stack)
+      recipe(form, data = data)
   }
 
-
+  res
 }
 
 call_step <- function(recipe, step_fn, selector) {
