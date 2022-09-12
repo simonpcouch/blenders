@@ -1,14 +1,74 @@
+```{r}
+library(tidymodels)
+library(bonsai)
+
+# define model specs and recipes -----------------------------------------------
+spec_lr <-
+  linear_reg(penalty = tune(), mixture = tune()) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+
+rec_lr <-
+  tribble(
+    ~steps,                 ~selectors,
+    step_dummy,             quo(all_nominal_predictors()),
+    step_zv,                quo(all_predictors()),
+    step_impute_knn,        quo(all_predictors()),
+    step_corr,              quo(all_predictors()),
+    step_pca,               quo(all_predictors())
+  )
+
+spec_bt <-
+  boost_tree(mtry = tune(), min_n = tune()) %>%
+  set_engine("lightgbm") %>%
+  set_mode("regression")
+
+rec_bt <- rec_lr
+
+spec_svm <-
+  svm_linear(cost = tune(), margin = tune()) %>%
+  set_engine("LiblineaR") %>%
+  set_mode("regression")
+
+rec_svm <-
+  bind_rows(
+    rec_lr,
+    tribble(
+      ~steps,                 ~selectors,
+      step_normalize,         quo(all_numeric_predictors()),
+      step_YeoJohnson,        quo(all_numeric_predictors())
+    )
+  )
+
+spec_nn <-
+  mlp(hidden_units = tune(), penalty = tune(), dropout = tune()) %>%
+  set_engine("nnet") %>%
+  set_mode("regression")
+
+rec_nn <- rec_svm
+
+spec_knn <-
+  nearest_neighbor(neighbors = tune()) %>%
+  set_engine("kknn") %>%
+  set_mode("regression")
+
+rec_knn <- rec_svm
+```
+
+
+
 
 ```{r}
-steps <- list(step_center, step_scale)
+new_rec <- preprocess_data(tree_frogs, rec_svm, "latency")
 
-steps <-
-  tibble(
-    steps = list(step_center, step_scale),
-    selectors = c(quo(all_numeric_predictors()),
-                  quo(all_numeric_predictors()))
-  )
+
+workflow() %>%
+  add_model(spec_svm) %>%
+  add_recipe(new_rec) %>%
+  tune_grid(resamples = vfold_cv(tree_frogs))
 ```
+
+
 
 ```{r}
 
