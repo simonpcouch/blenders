@@ -1,7 +1,9 @@
 ```{r}
 library(tidymodels)
 library(bonsai)
+```
 
+```{r}
 # define model specs and recipes -----------------------------------------------
 spec_lr <-
   linear_reg(penalty = tune(), mixture = tune()) %>%
@@ -53,134 +55,62 @@ spec_knn <-
   set_mode("regression")
 
 rec_knn <- rec_svm
+
+test_specs <-
+  tribble(
+    ~spec,        ~steps, 
+    spec_lr,      rec_lr,
+    spec_bt,      rec_bt,
+    spec_svm,     rec_svm,
+    spec_nn,      rec_nn,
+    spec_knn,     rec_knn
+  )
 ```
 
+```{r} 
+# define data sets to be used in testing ---------------------------------------
+tree_frogs <- 
+  stacks::tree_frogs %>% 
+  na.omit() %>%
+  mutate(across(where(is.character), as.factor)) %>%
+  dplyr::select(-hatched)
 
+concrete <- 
+   modeldata::concrete %>% 
+   group_by(across(-compressive_strength)) %>% 
+   summarize(compressive_strength = mean(compressive_strength),
+             .groups = "drop")
 
-
-```{r}
-new_rec <- preprocess_data(tree_frogs, rec_svm, "latency")
-
-
-workflow() %>%
-  add_model(spec_svm) %>%
-  add_recipe(new_rec) %>%
-  tune_grid(resamples = vfold_cv(tree_frogs))
+test_data <-
+  tribble(
+    ~data,                     ~outcome,
+    tree_frogs,                "latency",
+    concrete,                  "compressive_strength",
+    ames,                      "Sale_Price",
+    sim_regression(1e4),       "outcome"
+  )
 ```
 
+```{r}
+# construct workflows for model fits -------------------------------------------
+# make combinations of specifications and datasets 
+configs <-
+  bind_cols(
+    bind_rows(test_specs, test_specs, test_specs, test_specs),
+    uncount(test_data, weights = rep(nrow(test_specs), nrow(test_data)))
+  )
 
+configs
+```
 
 ```{r}
+res <- 
+  purrr::map2(
+    pmap(configs, construct_workflow),
+    uncount(test_data, weights = rep(nrow(test_specs), nrow(test_data))) %>% 
+      pull(data),
+    benchmark_model
+  )
 
-reprex::reprex({
-  
-  library(tidymodels)
-  library(stacks)
-  library(bonsai)
-  
-  tidymodels_prefer()
-  
-  # regression ------------------------------------------------------------------
-  reg_bt <-
-    boost_tree(mtry = tune()) %>%
-    set_engine("lightgbm") %>%
-    set_mode("regression")
-  
-  set.seed(1)
-  
-  reg_st_bt_time <-
-    system.time({
-      reg_st_bt <-
-        stacks() %>%
-        add_candidates(reg_res_lr) %>%
-        add_candidates(reg_res_svm) %>%
-        add_candidates(reg_res_sp) %>%
-        blend_predictions(meta_learner = reg_bt) %>%
-        fit_members()
-    })
-  
-  reg_st_bt_preds <- predict(reg_st_bt, tree_frogs_reg_test)
-  
-  # with a workflow:
-  reg_st_bt2 <-
-    stacks() %>%
-    add_candidates(reg_res_lr) %>%
-    add_candidates(reg_res_svm) %>%
-    add_candidates(reg_res_sp)
-  
-  reg_bt_wf <-
-    workflow() %>%
-    add_model(reg_bt) %>%
-    add_recipe(recipe(latency ~ ., data = reg_st_bt2))
-  
-  reg_st_bt2_ <-
-    reg_st_bt2 %>%
-    blend_predictions(meta_learner = reg_bt_wf) %>%
-    fit_members()
-  
-  set.seed(1)
-  
-  reg_st_glmnet_time <-
-    system.time({
-      reg_st_glmnet <-
-        stacks() %>%
-        add_candidates(reg_res_lr) %>%
-        add_candidates(reg_res_svm) %>%
-        add_candidates(reg_res_sp) %>%
-        blend_predictions() %>%
-        fit_members()
-    })
-  
-  reg_st_glmnet_preds <- predict(reg_st_glmnet, tree_frogs_reg_test)
-  
-  # comparing time to fit
-  reg_st_bt_time[["elapsed"]] / reg_st_glmnet_time[["elapsed"]]
-  
-  # comparing rmse
-  rmse_vec(tree_frogs_reg_test$latency, reg_st_bt_preds$.pred)
-  rmse_vec(tree_frogs_reg_test$latency, reg_st_glmnet_preds$.pred)
-  
-  # classification --------------------------------------------------------------
-  class_bt <-
-    boost_tree(mtry = tune(), min_n = tune(), tree_depth = tune()) %>%
-    set_engine("lightgbm") %>%
-    set_mode("classification")
-  
-  set.seed(1)
-  
-  class_st_bt_time <-
-    system.time({
-      class_st_bt <-
-        stacks() %>%
-        add_candidates(class_res_rf) %>%
-        add_candidates(class_res_nn) %>%
-        blend_predictions(meta_learner = class_bt) %>%
-        fit_members()
-    })
-  
-  class_st_bt_preds <- predict(class_st_bt, tree_frogs_class_test)
-  
-  set.seed(1)
-  
-  class_st_glmnet_time <-
-    system.time({
-      class_st_glmnet <-
-        stacks() %>%
-        add_candidates(class_res_rf) %>%
-        add_candidates(class_res_nn) %>%
-        blend_predictions() %>%
-        fit_members()
-    })
-  
-  class_st_glmnet_preds <- predict(class_st_glmnet, tree_frogs_class_test)
-  
-  # comparing accuracy
-  accuracy_vec(tree_frogs_class_test$reflex, class_st_bt_preds$.pred_class)
-  accuracy_vec(tree_frogs_class_test$reflex, class_st_glmnet_preds$.pred_class)
-  
-  # comparing time to fit
-  class_st_bt_time[["elapsed"]] / class_st_glmnet_time[["elapsed"]]
-})
-
-
+res
 ```

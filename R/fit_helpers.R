@@ -41,3 +41,8 @@ preprocess_data <- function(data, steps, outcome = attr(data, "outcome")) {
 call_step <- function(recipe, step_fn, selector) {
   recipe %>% step_fn(!!selector)
 }
+
+construct_workflow <- function(spec, steps, data, outcome) {
+  preprocess_data(data, steps, outcome) %>%
+    workflow(spec)
+}
