@@ -137,12 +137,12 @@ wf_sets <-
 
 wf_set_configs <-
   tibble(
-    workflow_set = rep(wf_sets, each = nrow(test_specs) + 1),
-    data = rep(test_data$data, each = nrow(test_specs) + 1),
-    meta_learner = 
-      c(rep(test_specs$spec, times = nrow(test_data)), 
-        rep(list(NULL), times = nrow(test_data))
-      ),
+    workflow_set = rep(wf_sets, times = nrow(test_specs) + 1),
+    data = rep(test_data$data, times = nrow(test_specs) + 1),
+    meta_learner = c(
+      rep(test_specs$spec, each = nrow(test_data)), 
+      rep(list(NULL), each = nrow(test_data))
+    ),
     steps = list(tibble())
   )
 
@@ -151,10 +151,56 @@ res_st <-
     wf_set_configs,
     benchmark_model
   )
+
+res_stack <-
+  res_st %>%
+  bind_rows() %>%
+  bind_cols(wf_set_configs) %>%
+  select(-c(workflow_set, data))
+
+save(res_stack, file = "data-raw/res_stack.Rda")
 ```
 
 
+```{r}
+# putting together a more plottable data frame
+res_base_small <-
+  res_base %>%
+  rowwise() %>%
+  mutate(
+    model_type = class(spec)[1],
+    dataset = case_when(
+      outcome == "latency" ~ "Tree Frogs",
+      outcome == "compressive_strength" ~ "Concrete",
+      outcome == "Sale_Price" ~ "Ames Housing",
+      outcome == "outcome" ~ "Simulated",
+    ),
+    stack = FALSE
+  ) %>%
+  select(-steps, -spec, -outcome)
 
+res_base_small
+
+res_stack_small <-
+  res_stack %>%
+  mutate(
+    outcome = rep(test_data$outcome, times = nrow(test_specs) + 1)
+  ) %>%
+  rowwise() %>%
+  mutate(
+    model_type = class(meta_learner)[1],
+    dataset = case_when(
+      outcome == "latency" ~ "Tree Frogs",
+      outcome == "compressive_strength" ~ "Concrete",
+      outcome == "Sale_Price" ~ "Ames Housing",
+      outcome == "outcome" ~ "Simulated",
+    ),
+    stack = TRUE
+  ) %>%
+  select(-steps, -meta_learner, -outcome)
+
+res_stack_small
+```
 
 
 
