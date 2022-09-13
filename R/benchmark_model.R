@@ -6,6 +6,11 @@
 # analogous benchmarks for somewhat disanalogous modeling workflows.
 #' @export
 benchmark_model <- function(..., data) {
+  library(tidymodels)
+  library(bonsai)
+  library(stacks)
+  library(blenders)
+
   UseMethod("benchmark_model")
 }
 
@@ -58,12 +63,17 @@ benchmark_model.workflow_set <- function(workflow_set, data, meta_learner, steps
         stacks() %>%
         add_candidates(candidates = map_res)
 
-      st_rec <- preprocess_data_stack(data_st, steps)
+      if (inherits(meta_learner, "model_spec")) {
+        st_rec <- preprocess_data(data_st, steps)
 
-      st_wf <-
-        workflow() %>%
-        add_model(meta_learner) %>%
-        add_recipe(st_rec)
+        st_wf <-
+          workflow() %>%
+          add_model(meta_learner) %>%
+          add_recipe(st_rec)
+      } else {
+        st_wf <- NULL
+      }
+
 
       res <-
         data_st %>%

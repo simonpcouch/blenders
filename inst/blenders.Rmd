@@ -86,10 +86,10 @@ concrete <-
 test_data <-
   tribble(
     ~data,                     ~outcome,
-    tree_frogs,                "latency",
     concrete,                  "compressive_strength",
-    ames,                      "Sale_Price",
-    sim_regression(1e4),       "outcome"
+    tree_frogs,                "latency",
+    sim_regression(1e4),       "outcome",
+    ames,                      "Sale_Price"
   )
 ```
 
@@ -106,6 +106,7 @@ configs
 ```
 
 ```{r}
+# benchmark the base learners --------------------------------------------------
 plan(multisession, workers = 8)
 
 res <- 
@@ -120,3 +121,40 @@ res_base <- bind_rows(res) %>% bind_cols(configs) %>% select(-data)
 
 save(res_base, file = "data-raw/res_base.Rda")
 ```
+
+```{r}
+# benchmark the model stacks ---------------------------------------------------
+wf_sets <-
+  configs %>% 
+  group_split(outcome) %>%
+  purrr::map(
+    ~workflow_set(
+      purrr::pmap(.x[2:4], preprocess_data),
+      .x[["spec"]],
+      cross = FALSE
+    )
+  )
+
+wf_set_configs <-
+  tibble(
+    workflow_set = rep(wf_sets, each = nrow(test_specs) + 1),
+    data = rep(test_data$data, each = nrow(test_specs) + 1),
+    meta_learner = 
+      c(rep(test_specs$spec, times = nrow(test_data)), 
+        rep(list(NULL), times = nrow(test_data))
+      ),
+    steps = list(tibble())
+  )
+
+res_st <- 
+  furrr::future_pmap(
+    wf_set_configs,
+    benchmark_model
+  )
+```
+
+
+
+
+
+
