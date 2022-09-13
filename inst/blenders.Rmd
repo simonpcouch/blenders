@@ -200,6 +200,12 @@ res_stack_small <-
   select(-steps, -meta_learner, -outcome)
 
 res_stack_small
+
+res <-
+  bind_rows(res_base_small, res_stack_small) %>%
+  select(stack, model_type, dataset, metric, metric_value, time_to_fit)
+
+save(res, file = "data-raw/res.Rda")
 ```
 
 
