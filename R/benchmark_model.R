@@ -1,50 +1,8 @@
-# Given a specification of a model and a dataset,
+# Given a specification of a meta-learner and a dataset,
 # clock the time to tune + fit the model and a
 # simple metric on its predictions.
-#
-# These methods are purposefully quite inflexible---we want quick,
-# analogous benchmarks for somewhat disanalogous modeling workflows.
 #' @export
-benchmark_model <- function(..., data) {
-  library(tidymodels)
-  library(bonsai)
-  library(stacks)
-  library(blenders)
-
-  UseMethod("benchmark_model")
-}
-
-#' @export
-benchmark_model.workflow <- function(workflow, data) {
-  set.seed(1)
-  data_split <- rsample::initial_split(data)
-  data_train <- rsample::training(data_split)
-  data_test  <- rsample::testing(data_split)
-
-  timing <-
-    system.time({
-      tune_res <-
-        tune::tune_grid(
-          object = workflow,
-          resamples = rsample::vfold_cv(data_train, v = 5)
-        )
-
-      metric_name <- tune::.get_tune_metric_names(tune_res)
-      metrics <- tune::.get_tune_metrics(tune_res)
-
-      res <-
-        workflow %>%
-        tune::finalize_workflow(tune::select_best(tune_res, metric = metric_name[1])) %>%
-        tune::last_fit(split = data_split, metrics = metrics)
-    })
-
-  list(time_to_fit = timing[["elapsed"]], metric = metric_name[1], metric_value = res$.metrics[[1]]$.estimate[1])
-}
-
-# note that the `steps` are the recipe steps for the preprocessor that
-# will be applied to the data stack rather than to the original data.
-#' @export
-benchmark_model.workflow_set <- function(workflow_set, data, meta_learner, steps) {
+benchmark_model <- function(workflow_set, data, meta_learner, steps) {
   set.seed(1)
   data_split <- rsample::initial_split(data)
   data_train <- rsample::training(data_split)
@@ -53,32 +11,31 @@ benchmark_model.workflow_set <- function(workflow_set, data, meta_learner, steps
   timing <-
     system.time({
       map_res <-
-        workflow_map(
+        workflowsets::workflow_map(
           object = workflow_set,
-          resamples = rsample::vfold_cv(data_train, v = 5),
-          control = control_stack_grid()
+          resamples = rsample::vfold_cv(data_train, v = 10),
+          control = stacks::control_stack_grid()
         )
 
       data_st <-
-        stacks() %>%
-        add_candidates(candidates = map_res)
+        stacks::stacks() %>%
+        stacks::add_candidates(candidates = map_res)
 
       if (inherits(meta_learner, "model_spec")) {
         st_rec <- preprocess_data(data_st, steps)
 
         st_wf <-
-          workflow() %>%
-          add_model(meta_learner) %>%
-          add_recipe(st_rec)
+          workflows::workflow() %>%
+          workflows::add_model(meta_learner) %>%
+          workflows::add_recipe(st_rec)
       } else {
         st_wf <- NULL
       }
 
-
       res <-
         data_st %>%
-        blend_predictions(meta_learner = st_wf) %>%
-        fit_members()
+        stacks::blend_predictions(meta_learner = st_wf) %>%
+        stacks::fit_members()
     })
 
   metric <- res$model_metrics[[1]]$.metric[[1]]

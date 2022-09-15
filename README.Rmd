@@ -26,16 +26,16 @@ data(stack_benchmarks)
 glimpse(stack_benchmarks)
 ```
 
-Notably, the `stack` column indicates whether model stacking was used, and the `model_type` column indicates the highest-level learner used. When `stack` is `TRUE`, this refers to the meta-learner. For several different datasets, we record the time to fit and RMSE value.
+Notably, the `model_type` column indicates the meta-learner learner used. For several different datasets, we record the time to fit and a metric value.
 
 ```{r basic-plot}
 stack_benchmarks %>%
   mutate(
-    glmnet_meta = if_else(isTRUE(stack) && model_type == "linear_reg", TRUE, FALSE)
+    glmnet_meta = if_else(model_type == "linear_reg", TRUE, FALSE)
   ) %>%
   ggplot() +
   aes(x = time_to_fit, y = metric_value, col = glmnet_meta) +
   geom_point() +
-  facet_grid(dataset ~ stack, scales = "free") +
+  facet_wrap(vars(dataset), scales = "free") +
   labs(x = "Time to Fit", y = "RMSE", col = "glmnet\nMeta-learner")
 ```

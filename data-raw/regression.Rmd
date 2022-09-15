@@ -71,6 +71,9 @@ test_specs <-
 
 ```{r} 
 # define data sets to be used in testing ---------------------------------------
+home_prices <-
+  KingCountyHouses::home_prices
+
 tree_frogs <- 
   stacks::tree_frogs %>% 
   na.omit() %>%
@@ -89,7 +92,7 @@ test_data <-
     concrete,                  "compressive_strength",
     tree_frogs,                "latency",
     sim_regression(1e4),       "outcome",
-    ames,                      "Sale_Price"
+    home_prices,               "price"
   )
 ```
 
@@ -103,23 +106,6 @@ configs <-
   )
 
 configs
-```
-
-```{r}
-# benchmark the base learners --------------------------------------------------
-plan(multisession, workers = 8)
-
-res <- 
-  furrr::future_map2(
-    pmap(configs, construct_workflow),
-    uncount(test_data, weights = rep(nrow(test_specs), nrow(test_data))) %>% 
-      pull(data),
-    benchmark_model
-  )
-
-res_base <- bind_rows(res) %>% bind_cols(configs) %>% select(-data)
-
-save(res_base, file = "data-raw/res_base.Rda")
 ```
 
 ```{r}
@@ -160,26 +146,7 @@ res_stack <-
 save(res_stack, file = "data-raw/res_stack.Rda")
 ```
 
-
 ```{r}
-# putting together a more plottable data frame
-res_base_small <-
-  res_base %>%
-  rowwise() %>%
-  mutate(
-    model_type = class(spec)[1],
-    dataset = case_when(
-      outcome == "latency" ~ "Tree Frogs",
-      outcome == "compressive_strength" ~ "Concrete",
-      outcome == "Sale_Price" ~ "Ames Housing",
-      outcome == "outcome" ~ "Simulated",
-    ),
-    stack = FALSE
-  ) %>%
-  select(-steps, -spec, -outcome)
-
-res_base_small
-
 res_stack_small <-
   res_stack %>%
   mutate(
@@ -193,8 +160,7 @@ res_stack_small <-
       outcome == "compressive_strength" ~ "Concrete",
       outcome == "Sale_Price" ~ "Ames Housing",
       outcome == "outcome" ~ "Simulated",
-    ),
-    stack = TRUE
+    )
   ) %>%
   select(-steps, -meta_learner, -outcome)
 
@@ -202,13 +168,11 @@ res_stack_small
 
 stack_benchmarks <-
   bind_rows(res_base_small, res_stack_small) %>%
-  select(stack, model_type, dataset, metric, metric_value, time_to_fit) %>%
+  select(model_type, dataset, metric, metric_value, time_to_fit) %>%
   ungroup()
 
 save(stack_benchmarks, file = "data-raw/stack_benchmarks.Rda")
 
 usethis::use_data(stack_benchmarks, overwrite = TRUE)
 ```
-
-
 

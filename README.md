@@ -22,31 +22,28 @@ library(blenders)
 data(stack_benchmarks)
 
 glimpse(stack_benchmarks)
-#> Rows: 40
-#> Columns: 6
-#> Rowwise: 
-#> $ stack        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, F…
-#> $ model_type   <chr> "linear_reg", "boost_tree", "svm_linear", "mlp", "nearest…
-#> $ dataset      <chr> "Tree Frogs", "Tree Frogs", "Tree Frogs", "Tree Frogs", "…
+#> Rows: 20
+#> Columns: 5
+#> $ model_type   <chr> "linear_reg", "linear_reg", "linear_reg", "linear_reg", "…
+#> $ dataset      <chr> "Concrete", "Tree Frogs", "Simulated", "Ames Housing", "C…
 #> $ metric       <chr> "rmse", "rmse", "rmse", "rmse", "rmse", "rmse", "rmse", "…
-#> $ metric_value <dbl> 56.221954, 55.868331, 56.744354, 57.558454, 56.633912, 14…
-#> $ time_to_fit  <dbl> 4.681, 5.576, 4.791, 5.540, 2.255, 4.521, 5.787, 4.387, 6…
+#> $ metric_value <dbl> 6.851051, 63.279304, 18.747218, 41098.057692, 7.408634, 5…
+#> $ time_to_fit  <dbl> 35.493, 40.375, 75.217, 93.208, 54.252, 46.524, 120.256, …
 ```
 
-Notably, the `stack` column indicates whether model stacking was used,
-and the `model_type` column indicates the highest-level learner used.
-When `stack` is `TRUE`, this refers to the meta-learner. For several
-different datasets, we record the time to fit and RMSE value.
+Notably, the `model_type` column indicates the meta-learner learner
+used. For several different datasets, we record the time to fit and a
+metric value.
 
 ``` r
 stack_benchmarks %>%
   mutate(
-    glmnet_meta = if_else(isTRUE(stack) && model_type == "linear_reg", TRUE, FALSE)
+    glmnet_meta = if_else(model_type == "linear_reg", TRUE, FALSE)
   ) %>%
   ggplot() +
   aes(x = time_to_fit, y = metric_value, col = glmnet_meta) +
   geom_point() +
-  facet_grid(dataset ~ stack, scales = "free") +
+  facet_wrap(vars(dataset), scales = "free") +
   labs(x = "Time to Fit", y = "RMSE", col = "glmnet\nMeta-learner")
 ```
 
