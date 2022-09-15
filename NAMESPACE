@@ -3,5 +3,4 @@
 export(benchmark_model)
 export(call_step)
 export(construct_workflow)
-export(fit_stack)
 export(preprocess_data)

@@ -1,6 +1,28 @@
-# Given a specification of a meta-learner and a dataset,
-# clock the time to tune + fit the model and a
-# simple metric on its predictions.
+#' Ensemble benchmarking
+#'
+#' A quick and scrappy utility for benchmarking a model stack.
+#'
+#' @param workflow_set An untrained workflow set containing the base learners
+#'   for the model stack.
+#' @param data A dataset to benchmark with---will be split into training and
+#'   testing, and resampled, internally.
+#' @param meta_learner A parsnip model specification giving the model that
+#'   will combine the predictions. Should contain specification of
+#'   hyperparameters to tune.
+#' @param steps A tibble of recipes steps to apply to the data stack. The
+#'   first column is a step function, and the second is a quosure giving the
+#'   selector (likely as a tidyselect helper). This object structure is
+#'   needed since the recipe can't be defined until it has a data structure
+#'   to prep on---the recipe is defined after the data stack is constructed.
+#'
+#' @return A list, with elements
+#'
+#' * `time_to_fit`: The time to tune over the workflowset (this will change),
+#'   construct the data stack, fit the meta-learner, and fit members with
+#'   non-zero coefficients.
+#' * `metric`: The metric automatically determined by tune.
+#' * `metric_value`: The value of that metric.
+#'
 #' @export
 benchmark_model <- function(workflow_set, data, meta_learner, steps) {
   set.seed(1)
