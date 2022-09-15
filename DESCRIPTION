@@ -22,3 +22,6 @@ Imports:
     tibble,
     dplyr,
     bonsai
+Depends: 
+    R (>= 2.10)
+LazyData: true
