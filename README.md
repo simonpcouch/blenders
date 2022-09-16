@@ -12,23 +12,23 @@ the possible benefits of this functionality.
 The `R` folder contains a few helper functions that are utilized in
 `inst`. The script in that folder, `data-raw/blenders.Rmd`, contains
 source code for generating the dataset supplied with this package. The
-dataset, `stack_benchmarks`, contains coarse benchmarks on different
-modeling procedures.
+dataset, `regression_benchmarks`, contains coarse benchmarks on
+different modeling procedures.
 
 ``` r
 library(tidyverse)
 library(blenders)
 
-data(stack_benchmarks)
+data(regression_benchmarks)
 
-glimpse(stack_benchmarks)
+glimpse(regression_benchmarks)
 #> Rows: 20
 #> Columns: 5
-#> $ model_type   <chr> "linear_reg", "linear_reg", "linear_reg", "linear_reg", "…
-#> $ dataset      <chr> "Concrete", "Tree Frogs", "Simulated", "Ames Housing", "C…
+#> $ dataset      <chr> "Concrete", "Concrete", "Concrete", "Concrete", "Concrete…
+#> $ meta_learner <chr> "linear_reg", "boost_tree", "svm_linear", "mlp", "nearest…
+#> $ time_to_fit  <dbl> 19.017, 24.119, 21.355, 25.684, 14.965, 63.389, 89.097, 7…
 #> $ metric       <chr> "rmse", "rmse", "rmse", "rmse", "rmse", "rmse", "rmse", "…
-#> $ metric_value <dbl> 6.851051, 63.279304, 18.747218, 41098.057692, 7.408634, 5…
-#> $ time_to_fit  <dbl> 35.493, 40.375, 75.217, 93.208, 54.252, 46.524, 120.256, …
+#> $ metric_value <dbl> 7.0923820, 7.1114722, 7.4861566, 16.5378152, 7.3095294, 0…
 ```
 
 Notably, the `model_type` column indicates the meta-learner learner
@@ -36,9 +36,9 @@ used. For several different datasets, we record the time to fit and a
 metric value.
 
 ``` r
-stack_benchmarks %>%
+regression_benchmarks %>%
   mutate(
-    glmnet_meta = if_else(model_type == "linear_reg", TRUE, FALSE)
+    glmnet_meta = if_else(meta_learner == "linear_reg", TRUE, FALSE)
   ) %>%
   ggplot() +
   aes(x = time_to_fit, y = metric_value, col = glmnet_meta) +

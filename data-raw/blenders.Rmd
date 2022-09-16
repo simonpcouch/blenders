@@ -1,0 +1,200 @@
+```{r}
+library(tidymodels)
+library(bonsai)
+library(blenders)
+library(future)
+```
+
+```{r}
+# define model specs and recipes -----------------------------------------------
+spec_lr <-
+  linear_reg(penalty = tune(), mixture = tune()) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+
+rec_lr <-
+  tribble(
+    ~steps,                 ~selectors,
+    step_dummy,             quo(all_nominal_predictors()),
+    step_zv,                quo(all_predictors()),
+    step_impute_knn,        quo(all_predictors()),
+    step_corr,              quo(all_numeric_predictors()),
+    step_pca,               quo(all_numeric_predictors())
+  )
+
+spec_bt <-
+  boost_tree(mtry = tune(), min_n = tune()) %>%
+  set_engine("lightgbm") %>%
+  set_mode("regression")
+
+rec_bt <- rec_lr
+
+spec_svm <-
+  svm_linear(cost = tune(), margin = tune()) %>%
+  set_engine("LiblineaR") %>%
+  set_mode("regression")
+
+rec_svm <-
+  bind_rows(
+    rec_lr,
+    tribble(
+      ~steps,                 ~selectors,
+      step_normalize,         quo(all_numeric_predictors()),
+      step_YeoJohnson,        quo(all_numeric_predictors())
+    )
+  )
+
+spec_nn <-
+  mlp(hidden_units = tune(), penalty = tune()) %>%
+  set_engine("nnet") %>%
+  set_mode("regression")
+
+rec_nn <- rec_svm
+
+spec_knn <-
+  nearest_neighbor(neighbors = tune()) %>%
+  set_engine("kknn") %>%
+  set_mode("regression")
+
+rec_knn <- rec_svm
+
+test_specs <-
+  tribble(
+    ~spec,        ~steps, 
+    spec_lr,      rec_lr,
+    spec_bt,      rec_bt,
+    spec_svm,     rec_svm,
+    spec_nn,      rec_nn,
+    spec_knn,     rec_knn
+  )
+```
+
+```{r} 
+# define data sets to be used in testing ---------------------------------------
+home_prices <-
+  KingCountyHouses::home_prices %>%
+  select(-date_sold)
+
+tree_frogs <- 
+  stacks::tree_frogs %>% 
+  na.omit() %>%
+  mutate(across(where(is.character), as.factor)) %>%
+  dplyr::select(-hatched)
+
+concrete <- 
+   modeldata::concrete %>% 
+   group_by(across(-compressive_strength)) %>% 
+   summarize(compressive_strength = mean(compressive_strength),
+             .groups = "drop")
+
+test_data <-
+  tribble(
+    ~data,                     ~outcome,                ~name,
+    concrete,                  "compressive_strength",  "Concrete",
+    tree_frogs,                "latency",               "Tree Frogs",
+    sim_regression(1e4),       "outcome",               "Simulated",
+    home_prices,               "price",                 "Home Prices"
+  ) %>%
+  rowwise() %>%
+  mutate(
+    split = list(rsample::initial_split(data)),
+    data_train = list(rsample::training(split)),
+    data_test = list(rsample::testing(split))
+  ) %>%
+  select(-data, -split) %>%
+  ungroup()
+```
+
+```{r}
+# construct workflows for model fits -------------------------------------------
+# make combinations of specifications and datasets 
+configs <-
+  test_specs %>%
+  rowwise() %>%
+  mutate(test_data = list(test_data)) %>%
+  unnest(test_data) %>%
+  ungroup()
+```
+
+```{r, cache = TRUE}
+create_wf_map <- function(x) {
+  pre <- 
+    x %>%
+    mutate(
+      data = data_train, .after = spec
+    ) %>%
+    select(data, steps, outcome)
+  
+  wf_set <- 
+    workflow_set(
+      preproc = purrr::pmap(pre, preprocess_data),
+      models = x[["spec"]],
+      cross = FALSE
+    ) %>%
+    workflow_map(
+      fn = "tune_grid",
+      resamples = rsample::vfold_cv(x[["data_train"]][[1]], v = 10),
+      grid = 10,
+      control = stacks::control_stack_grid()
+    )
+  
+  tibble(
+    name = x[["name"]][[1]], 
+    wf_set = list(wf_set), 
+    data_test = list(x[["data_test"]][[1]])
+  )
+}
+
+# create trained workflow sets -------------------------------------------------
+wf_sets <- 
+  configs %>% 
+  group_split(name) %>%
+  furrr::future_map(create_wf_map)
+
+save(wf_sets, file = "data-raw/regression-wf-sets.Rda")
+```
+
+```{r}
+# make data stacks out of each of the trained workflow sets,
+# one for each dataset
+data_stacks <- 
+  wf_sets %>%
+  bind_rows() %>%
+  rowwise() %>%
+  mutate(
+    data_stack = list(stacks::stacks() %>% stacks::add_candidates(wf_set)),
+    .after = name
+  ) %>%
+  ungroup() %>%
+  select(-wf_set)
+
+data_stacks
+```
+
+
+```{r}
+stack_configs <-
+  data_stacks %>%
+  mutate(specs = list(test_specs)) %>%
+  unnest(specs) %>%
+  rowwise() %>%
+  mutate(
+    meta_rec = list(preprocess_data(data_stack, steps = steps)),
+    meta_learner = list(workflow(preproc = meta_rec, spec = spec))
+  ) %>%
+  select(name, data_stack, meta_learner, data_test)
+
+res_st <- 
+  furrr::future_pmap(
+    stack_configs,
+    benchmark_model
+  )
+
+regression_benchmarks <-
+  res_st %>%
+  bind_rows()
+
+save(regression_benchmarks, file = "data-raw/regression-benchmarks.Rda")
+usethis::use_data(regression_benchmarks, overwrite = TRUE)
+```
+
