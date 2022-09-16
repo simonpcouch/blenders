@@ -9,9 +9,15 @@ library(blenders)
 
 library(furrr)
 
+# parsnip extensions
 library(rules)
 library(bonsai)
 library(stacks)
+
+# data sources
+library(KingCountyHouses)
+library(tidytuesdayR)
+library(modeldata)
 ```
 
 # Setup
@@ -114,25 +120,51 @@ home_prices <-
   KingCountyHouses::home_prices %>%
   select(-date_sold)
 
-tree_frogs <- 
-  stacks::tree_frogs %>% 
-  na.omit() %>%
-  mutate(across(where(is.character), as.factor)) %>%
-  select(-hatched)
-
 concrete <- 
    modeldata::concrete %>% 
    group_by(across(-compressive_strength)) %>% 
    summarize(compressive_strength = mean(compressive_strength),
              .groups = "drop")
 
+wind_turbine_raw <- tt_load("2020-10-27")$`wind-turbine`
+
+wind_turbine <-
+  wind_turbine_raw %>%
+  rename(capacity = total_project_capacity_mw) %>%
+  recipe(capacity ~ ., .) %>%
+  step_select(-objectid, -notes, -turbine_identifier, -project_name) %>%
+  step_mutate(
+    turbine_number_in_project = gsub("[[:digit:]]/", "", turbine_number_in_project)
+  ) %>%
+  step_other(manufacturer, model, province_territory) %>%
+  prep() %>%
+  bake(NULL)
+
+epa_cars_raw <- tt_load("2019-10-15")$big_epa_cars
+
+epa_cars <- 
+  epa_cars_raw %>%
+  mutate(mpg = if_else(highway08 != 0, highway08, highwayA08)) %>%
+  recipe(mpg ~ .) %>%
+  step_rm(contains("City|Highway|dOn|phev")) %>%
+  step_filter_missing(all_predictors()) %>%
+  step_other(all_nominal_predictors(), threshold = 150) %>%
+  prep() %>%
+  bake(NULL)
+
+
 test_data <-
   tribble(
     ~data,                     ~outcome,                ~name,
     concrete,                  "compressive_strength",  "Concrete",
-    tree_frogs,                "latency",               "Tree Frogs",
-    sim_regression(1e4),       "outcome",               "Simulated",
-    home_prices,               "price",                 "Home Prices"
+    wind_turbine,              "capacity",              "Wind Turbines",
+    sim_regression(1e4),       "outcome",               "Simulated (linear)",
+    sim_regression(
+      1e4,
+      method = "van_der_laan_2007_2"
+    ),                         "outcome",               "Simulated (nonlinear)",
+    home_prices,               "price",                 "Home Prices",
+    epa_cars,                  "mpg",                   "EPA Cars"
   ) %>%
   rowwise() %>%
   mutate(
