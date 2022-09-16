@@ -1,9 +1,18 @@
+# Benchmarking stacks
+
+Source code for benchmarking various meta-learners with a number of different datasets.
+
 ```{r}
 library(tidymodels)
+library(stacks)
 library(bonsai)
 library(blenders)
-library(future)
+library(furrr)
 ```
+
+# Setup
+
+We start off by defining several model specifications as well as accompanying pre-processing. These model specifications will be used both as base learners (`n_base_learners` times per dataset) and meta-learners (once per dataset). Each specification defines two hyperparameters to tune.
 
 ```{r}
 # define model specs and recipes -----------------------------------------------
@@ -69,6 +78,10 @@ test_specs <-
   )
 ```
 
+## Regression
+
+We also define a number of datasets to be used in benchmarking. We do some basic pre-processing for each, and further preprocessing will take place at hyperparameter tuning (for both base learners and the meta-learner.)
+
 ```{r} 
 # define data sets to be used in testing ---------------------------------------
 home_prices <-
@@ -79,7 +92,7 @@ tree_frogs <-
   stacks::tree_frogs %>% 
   na.omit() %>%
   mutate(across(where(is.character), as.factor)) %>%
-  dplyr::select(-hatched)
+  select(-hatched)
 
 concrete <- 
    modeldata::concrete %>% 
@@ -97,13 +110,15 @@ test_data <-
   ) %>%
   rowwise() %>%
   mutate(
-    split = list(rsample::initial_split(data)),
-    data_train = list(rsample::training(split)),
-    data_test = list(rsample::testing(split))
+    split = list(initial_split(data)),
+    data_train = list(training(split)),
+    data_test = list(testing(split))
   ) %>%
   select(-data, -split) %>%
   ungroup()
 ```
+
+Match each dataset up with a base-learner, and then unnest:
 
 ```{r}
 # construct workflows for model fits -------------------------------------------
@@ -116,6 +131,8 @@ configs <-
   ungroup()
 ```
 
+Re-"nest" the specifications as workflow sets, by dataset, and tune hyperparameters for each:
+
 ```{r, cache = TRUE}
 create_wf_map <- function(x) {
   pre <- 
@@ -127,15 +144,15 @@ create_wf_map <- function(x) {
   
   wf_set <- 
     workflow_set(
-      preproc = purrr::pmap(pre, preprocess_data),
+      preproc = pmap(pre, preprocess_data),
       models = x[["spec"]],
       cross = FALSE
     ) %>%
     workflow_map(
       fn = "tune_grid",
-      resamples = rsample::vfold_cv(x[["data_train"]][[1]], v = 10),
+      resamples = vfold_cv(x[["data_train"]][[1]], v = 10),
       grid = 10,
-      control = stacks::control_stack_grid()
+      control = control_stack_grid()
     )
   
   tibble(
@@ -149,20 +166,21 @@ create_wf_map <- function(x) {
 wf_sets <- 
   configs %>% 
   group_split(name) %>%
-  furrr::future_map(create_wf_map)
+  future_map(create_wf_map)
 
 save(wf_sets, file = "data-raw/regression-wf-sets.Rda")
 ```
 
+Make data stacks out of each of the trained workflow sets, one for each dataset:
+
 ```{r}
-# make data stacks out of each of the trained workflow sets,
-# one for each dataset
+# constructing data stacks -----------------------------------------------------
 data_stacks <- 
   wf_sets %>%
   bind_rows() %>%
   rowwise() %>%
   mutate(
-    data_stack = list(stacks::stacks() %>% stacks::add_candidates(wf_set)),
+    data_stack = list(stacks() %>% add_candidates(wf_set)),
     .after = name
   ) %>%
   ungroup() %>%
@@ -171,6 +189,7 @@ data_stacks <-
 data_stacks
 ```
 
+We have a data stack and a test set for each dataset. Now, match each data stack up with each base learner, this time to be used as a meta-learner,
 
 ```{r}
 stack_configs <-
@@ -184,8 +203,14 @@ stack_configs <-
   ) %>%
   select(name, data_stack, meta_learner, data_test)
 
+stack_configs
+```
+
+Finally, blend predictions and benchmark each:
+
+```{r}
 res_st <- 
-  furrr::future_pmap(
+  future_pmap(
     stack_configs,
     benchmark_model
   )
@@ -198,3 +223,6 @@ save(regression_benchmarks, file = "data-raw/regression-benchmarks.Rda")
 usethis::use_data(regression_benchmarks, overwrite = TRUE)
 ```
 
+## Classification
+
+<!-- repeat the process from before, switching out modes and specs as needed. -->
