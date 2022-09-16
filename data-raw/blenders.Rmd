@@ -18,6 +18,7 @@ library(stacks)
 library(KingCountyHouses)
 library(tidytuesdayR)
 library(modeldata)
+library(ongoal)
 ```
 
 # Setup
@@ -114,7 +115,7 @@ test_specs <-
 
 We also define a number of datasets to be used in benchmarking. We do some basic pre-processing for each, and further preprocessing will take place at hyperparameter tuning (for both base learners and the meta-learner.)
 
-```{r} 
+```{r, cache = TRUE} 
 # define data sets to be used in testing ---------------------------------------
 home_prices <-
   KingCountyHouses::home_prices %>%
@@ -282,5 +283,94 @@ usethis::use_data(regression_benchmarks, overwrite = TRUE)
 ```
 
 ## Classification
+
+Altering the model specifications to use the "classification" mode, and switching out `linear_reg()` for `multinom_reg()`:
+
+```{r}
+test_specs_class <-
+  test_specs %>%
+  rowwise() %>%
+  filter(!class(spec)[[1]] %in% "linear_reg") %>%
+  mutate(
+    spec = list(set_mode(spec, "classification"))
+  ) %>%
+  bind_rows(
+    tibble(
+      spec = list(logistic_reg(penalty = tune(), mixture = tune()) %>% 
+                    set_engine ("glmnet")), 
+      steps = list(rec_lr))
+  )
+```
+
+Defining new datasets for benchmarking:
+
+```{r, cache = TRUE} 
+# define data sets to be used in testing ---------------------------------------
+cells <-
+  modeldata::cells %>%
+  select(-case)
+
+on_goal <-
+  ongoal::on_goal %>%
+  recipe(on_goal ~ .) %>%
+  step_date(date_time, features = c("dow", "month", "year")) %>%
+  step_holiday(date_time) %>%
+  step_rm(date_time) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors()) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_ns(angle, deg_free = 10) %>%
+  prep() %>%
+  bake(NULL)
+
+beans <-
+  beans::beans %>%
+  mutate(is_dermason = if_else(class == "dermason", "Yes", "No"),
+         is_dermason = as.factor(is_dermason)) %>%
+  select(-class)
+
+sim_linear <-
+  sim_classification(1e4) %>%
+  select(-contains("non_"))
+
+sim_nonlinear <-
+  sim_classification(1e4, num_linear = 13) %>%
+  select(-starts_with("linear_0"))
+
+water_raw <- tt_load("2021-05-04")$water
+
+water <-
+  water_raw %>%
+  mutate(report_date = mdy(report_date)) %>%
+  filter(status_id %in% c("y", "n")) %>% 
+  recipe(status_id ~ .) %>%
+  step_date(report_date, keep_original_cols = FALSE) %>%
+  step_rm(row_id, status, installer, pay) %>%
+  step_filter_missing(threshold = .2) %>%
+  step_other(all_nominal_predictors()) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  prep() %>%
+  bake(NULL)
+  
+
+test_data_class <-
+  tribble(
+    ~data,                     ~outcome,                ~name,
+    cells,                     "class",                 "Cells",
+    sim_linear,                "class",                 "Simulated (Linear)",
+    sim_nonlinear,             "class",                 "Simulated (Non-linear)",
+    on_goal,                   "on_goal",               "On Goal",
+    beans,                     "is_dermason",           "Beans",
+    water,                     "status_id",             "Water"
+  ) %>%
+  rowwise() %>%
+  mutate(
+    split = list(initial_split(data)),
+    data_train = list(training(split)),
+    data_test = list(testing(split))
+  ) %>%
+  select(-data, -split) %>%
+  ungroup()
+```
 
 <!-- repeat the process from before, switching out modes and specs as needed. -->

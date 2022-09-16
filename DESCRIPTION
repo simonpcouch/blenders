@@ -22,9 +22,14 @@ Imports:
     tibble,
     dplyr,
     bonsai,
-    KingCountyHouses
+    KingCountyHouses,
+    beans,
+    tidytuesdayR,
+    ongoal
 Depends: 
     R (>= 2.10)
 LazyData: true
 Remotes:
-    topepo/KingCountyHouses
+    topepo/KingCountyHouses,
+    topepo/ongoal,
+    topepo/beans
