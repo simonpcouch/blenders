@@ -15,6 +15,8 @@
 #'
 #' @export
 benchmark_model <- function(name, data_stack, meta_learner, data_test) {
+  library(bonsai)
+
   if ((!inherits(data_stack, "data_stack"))) {
     rlang::abort("Please supply a data stack as `data_stack`.")
   }

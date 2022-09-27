@@ -275,7 +275,8 @@ stack_configs <-
     meta_rec = list(preprocess_data(data_stack, steps = steps)),
     meta_learner = list(workflow(preproc = meta_rec, spec = spec))
   ) %>%
-  select(name, data_stack, meta_learner, data_test)
+  select(name, data_stack, meta_learner, data_test) %>%
+  ungroup()
 
 stack_configs
 ```
