@@ -10,7 +10,7 @@ meta-learner in stacks. This repository contains source code for testing
 the possible benefits of this functionality.
 
 The `R` folder contains a few helper functions that are utilized in
-`inst`. The script in that folder, `data-raw/blenders.Rmd`, contains
+`data-raw`. The script in that folder, `data-raw/blenders.Rmd`, contains
 source code for generating the dataset supplied with this package. The
 dataset, `regression_benchmarks`, contains coarse benchmarks on
 different modeling procedures.
